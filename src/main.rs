@@ -57,6 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting cc at http://{}, db at {}", cli.url, cli.db.display());
 
     let mut app = Router::new()
+        .route("/favicon.ico", axum::routing::get(|| async { StatusCode::NOT_FOUND }))
         .route("/put", axum::routing::post(put_new))
         .route("/{code}", axum::routing::get(get_code))
         .with_state(db);
