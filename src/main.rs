@@ -22,6 +22,10 @@ struct Cli {
     /// Base URL for shortened links.
     #[arg(long, default_value = "127.0.0.1:8080")]
     url: SocketAddr,
+
+    /// Path to an html file to serve on the root path.
+    #[arg(long)]
+    index: Option<PathBuf>,
 }
 
 #[derive(Serialize)]
@@ -52,10 +56,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Starting cc at http://{}, db at {}", cli.url, cli.db.display());
 
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/put", axum::routing::post(put_new))
         .route("/{code}", axum::routing::get(get_code))
         .with_state(db);
+
+    if let Some(index) = &cli.index {
+        if !index.is_file() {
+            eprintln!("index file does not exist or is not a file: {}", index.display());
+            std::process::exit(1);
+        }
+
+        let index = axum::response::Html(std::fs::read_to_string(index)?);
+        app = app.route("/", axum::routing::get(move || async { index }));
+    }
+
+    app = app.fallback_service(axum::routing::get(|| async { StatusCode::NOT_FOUND }));
 
     let listener = tokio::net::TcpListener::bind(cli.url).await?;
     axum::serve(listener, app).await?;
