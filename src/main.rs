@@ -1,16 +1,23 @@
+use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use axum::{Router, extract::State, Json};
 use base64::Engine;
 use clap::Parser;
 use rand::RngExt;
 use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, TableHandle};
 use serde::Serialize;
 use anyhow::Result;
-use axum::extract::Path;
-use axum::http::{StatusCode, Uri};
-use axum::response::{IntoResponse, Redirect, Response as AxumResponse};
+use axum::{
+    body::Bytes,
+    Router,
+    extract::{State, Path},
+    Json,
+    http::{StatusCode, Uri},
+    response::{Html, IntoResponse, Redirect, Response as AxumResponse},
+    routing::{get, post}
+};
+use tokio::net::TcpListener;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about)]
@@ -43,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     if let Some(parent) = cli.db.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent)?;
     }
     let db = Arc::new(Database::create(&cli.db)?);
 
@@ -57,9 +64,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting cc at http://{}, db at {}", cli.url, cli.db.display());
 
     let mut app = Router::new()
-        .route("/favicon.ico", axum::routing::get(|| async { StatusCode::NOT_FOUND }))
-        .route("/put", axum::routing::post(put_new))
-        .route("/{code}", axum::routing::get(get_code))
+        .route("/put", post(put_new))
+        .route("/{code}", get(get_code))
         .with_state(db);
 
     if let Some(index) = &cli.index {
@@ -68,13 +74,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::process::exit(1);
         }
 
-        let index = axum::response::Html(std::fs::read_to_string(index)?);
-        app = app.route("/", axum::routing::get(move || async { index }));
+        let index = Html(fs::read_to_string(index)?);
+        app = app.route("/", get(move || async { index }));
     }
 
-    app = app.fallback_service(axum::routing::get(|| async { StatusCode::NOT_FOUND }));
+    app = app.fallback_service(get(|| async { StatusCode::NOT_FOUND }));
 
-    let listener = tokio::net::TcpListener::bind(cli.url).await?;
+    let listener = TcpListener::bind(cli.url).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
@@ -84,14 +90,13 @@ macro_rules! nope {
     ($e:expr) => {
         {
             println!("db error: {}", $e);
-            let j = Json(Response { ok: false, msg: format!("db error: {}", $e) }).into_response();
+            let j = Json(Response { ok: false, msg: "problem with database".to_string() });
             return (StatusCode::INTERNAL_SERVER_ERROR, j).into_response();
         }
     };
 }
 
 async fn get_code(State(db): State<Arc<Database>>, code: Path<String>) -> AxumResponse {
-    println!("got request for code: {}", code.as_str());
     let rd = match db.begin_read() {
         Ok(rd) => rd,
         Err(e) => nope!(e),
@@ -103,13 +108,16 @@ async fn get_code(State(db): State<Arc<Database>>, code: Path<String>) -> AxumRe
     };
 
     return match rd_c2u.get(code.as_str()) {
-        Ok(Some(url)) => Redirect::permanent(url.value()).into_response(),
+        Ok(Some(url)) => {
+            println!("found code {} -> {}", code.as_str(), url.value());
+            Redirect::permanent(url.value()).into_response()
+        },
         Ok(None) => StatusCode::NOT_FOUND.into_response(),
         Err(e) => nope!(e)
     }
 }
 
-async fn put_new(State(db): State<Arc<Database>>, raw_url: axum::body::Bytes) -> AxumResponse {
+async fn put_new(State(db): State<Arc<Database>>, raw_url: Bytes) -> AxumResponse {
     let mut str_url = match std::str::from_utf8(&raw_url) {
         Ok(u) => u.trim().to_string(),
         Err(e) => {

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <meta charset=UTF-8>
+    <title>cc example frontend</title>
+    <style>
+        body {
+            background-color: #f0f0fa;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif
+        }
+        small {
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+<header style="margin-bottom: 1em">
+    <h1 style="margin-bottom: 0">cc example frontend</h1>
+    <small style="margin-top: 0">this is a minimal example frontend for cc!</small>
+</header>
+<main>
+    <label>
+        <input id="url-input" placeholder="https://example.com" type="url">
+        <button id="shorten-btn">shorten</button>
+    </label>
+    <br>
+    <small id="result"></small>
+</main>
+<script>
+    const urlInput = document.getElementById('url-input');
+    const shortenBtn = document.getElementById('shorten-btn');
+    const result = document.getElementById('result');
+    shortenBtn.addEventListener('click', async () => {
+        const url = urlInput.value.trim();
+        if (!url) {
+            result.textContent = 'Please enter a URL';
+            return;
+        }
+
+        shortenBtn.disabled = true;
+        result.textContent = 'Shortening...';
+
+        try {
+            const response = await fetch('/put', {
+                method: 'POST',
+                body: url
+            });
+
+            /** @type {{ok: boolean, msg: string}} */
+            const data = await response.json();
+
+            if (response.ok) {
+                const shortUrl = `${window.location.origin}/${data.msg}`;
+                result.innerHTML = `Shortened URL: <a href="${shortUrl}" target="_blank">${shortUrl}</a>`;
+            } else {
+                result.textContent = `Error: ${data.msg}`;
+            }
+        } catch (error) {
+            result.textContent = `Error: ${error.message}`;
+        } finally {
+            shortenBtn.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>
