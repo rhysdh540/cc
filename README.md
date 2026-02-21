@@ -19,11 +19,15 @@ an example is provided at [example_index.html](./example_index.html):
 ```sh
 # on client
 
-> curl -X POST <url>/put -d '<long-url>'
+> curl -X POST -i <url>/put -d '<long-url>'
+HTTP/1.1 201 Created
+location: /<code>
+...
 {"ok":true,"msg":"<code>"}
 
 > curl -X GET -i <url>/<code>
 HTTP/1.1 308 Permanent Redirect
+location: <long-url>
 ...
 ```
 

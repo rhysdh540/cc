@@ -17,6 +17,7 @@ use axum::{
     response::{Html, IntoResponse, Redirect, Response as AxumResponse},
     routing::{get, post}
 };
+use axum::http::header::LOCATION;
 use tokio::net::TcpListener;
 
 #[derive(Debug, Clone, Parser)]
@@ -249,7 +250,7 @@ async fn put_new(State(db): State<Arc<Database>>, raw_url: Bytes) -> AxumRespons
 
     println!("stored: {} -> {}", code.as_str(), url);
     let j = Json(Response { ok: true, msg: code.to_string() }).into_response();
-    return (StatusCode::CREATED, j).into_response();
+    return (StatusCode::CREATED, [(LOCATION, format!("/{}", code))] , j).into_response();
 }
 
 fn gen_key() -> String {
