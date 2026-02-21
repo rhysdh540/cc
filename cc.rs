@@ -185,7 +185,12 @@ async fn put_new(State(db): State<Arc<Database>>, raw_url: Bytes) -> AxumRespons
         }
     };
 
-    str_url = url.to_string(); // normalize the url
+    // normalize the url
+    if str_url.contains("#") {
+        str_url = url.to_string() + "#" + str_url.splitn(2, "#").nth(1).unwrap_or("");
+    } else {
+        str_url = url.to_string();
+    }
 
     if let Some(scheme) = url.scheme_str() {
         if !ALLOWED_SCHEMES.contains(&scheme) {
