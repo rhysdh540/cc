@@ -5,7 +5,7 @@ use std::sync::Arc;
 use base64::Engine;
 use clap::Parser;
 use rand::RngExt;
-use redb::{Database, ReadableDatabase, ReadableTable, TableDefinition, TableHandle};
+use redb::{Database, ReadableDatabase, ReadableTable, ReadableTableMetadata, TableDefinition, TableHandle};
 use serde::Serialize;
 use anyhow::Result;
 use axum::{
@@ -22,17 +22,32 @@ use tokio::net::TcpListener;
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about)]
 struct Cli {
-    /// Path to the database file.
-    #[arg(long)]
-    db: PathBuf,
+    #[command(subcommand)]
+    command: Commands,
+}
 
-    /// Base URL for shortened links.
-    #[arg(long, default_value = "127.0.0.1:8080")]
-    url: SocketAddr,
+#[derive(Debug, Clone, Parser)]
+enum Commands {
+    Serve {
+        /// Path to the database file.
+        #[arg()]
+        db: PathBuf,
 
-    /// Path to an html file to serve on the root path.
-    #[arg(long)]
-    index: Option<PathBuf>,
+        /// Base URL for shortened links.
+        #[arg(long, default_value = "127.0.0.1:8080")]
+        url: SocketAddr,
+
+        /// Path to an html file to serve on the root path.
+        #[arg(long)]
+        index: Option<PathBuf>,
+    },
+    /// List all code -> url mappings in the database.
+    #[command(name = "ls")]
+    List {
+        /// Path to the database file.
+        #[arg()]
+        db: PathBuf,
+    }
 }
 
 #[derive(Serialize)]
@@ -49,10 +64,45 @@ const ALLOWED_SCHEMES: &[&str] = &["http", "https"];
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
-    if let Some(parent) = cli.db.parent() {
+    match cli.command {
+        Commands::Serve { db, url, index } => serve(db, url, index).await?,
+        Commands::List { db } => list(db)?,
+    }
+
+    Ok(())
+}
+
+fn list(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+    if !path.is_file() {
+        eprintln!("database file does not exist or is not a file: {}", path.display());
+        std::process::exit(1);
+    }
+    let db = Database::open(&path)?;
+    let rd = db.begin_read()?;
+    let rd_c2u = rd.open_table(CODE_TO_URL)?;
+
+    println!("{} mapping{} found in {}:",
+             rd_c2u.len()?, if rd_c2u.len()? == 1 { "" } else { "s" }, path.display());
+    rd_c2u.iter()?.for_each(|res| {
+        if let Ok((code, url)) = res {
+            println!("  {} -> {}", code.value(), url.value());
+        } else {
+            println!("  error reading mapping: {}", res.err().unwrap());
+        }
+    });
+
+    Ok(())
+}
+
+async fn serve(
+    path: PathBuf,
+    url: SocketAddr,
+    index: Option<PathBuf>
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let db = Arc::new(Database::create(&cli.db)?);
+    let db = Arc::new(Database::create(&path)?);
 
     if !db.begin_read()?.list_tables()?.any(|tb| tb.name() == CODE_TO_URL.name()) {
         let wr = db.begin_write()?;
@@ -61,14 +111,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         wr.commit()?;
     }
 
-    println!("Starting cc at http://{}, db at {}", cli.url, cli.db.display());
+    println!("Starting cc at http://{}, db at {}", url, path.display());
 
     let mut app = Router::new()
         .route("/put", post(put_new))
         .route("/{code}", get(get_code))
         .with_state(db);
 
-    if let Some(index) = &cli.index {
+    if let Some(index) = &index {
         if !index.is_file() {
             eprintln!("index file does not exist or is not a file: {}", index.display());
             std::process::exit(1);
@@ -80,7 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     app = app.fallback_service(get(|| async { StatusCode::NOT_FOUND }));
 
-    let listener = TcpListener::bind(cli.url).await?;
+    let listener = TcpListener::bind(url).await?;
     axum::serve(listener, app).await?;
 
     Ok(())

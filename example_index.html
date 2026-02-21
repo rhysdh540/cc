@@ -2,7 +2,7 @@
 <html lang=en>
 <head>
     <meta charset=UTF-8>
-    <title>cc example frontend</title>
+    <title>cc</title>
     <style>
         body {
             background-color: #f0f0fa;
@@ -15,7 +15,7 @@
 </head>
 <body>
 <header style="margin-bottom: 1em">
-    <h1 style="margin-bottom: 0">cc example frontend</h1>
+    <h1 style="margin-bottom: 0">cc</h1>
     <small style="margin-top: 0">this is a minimal example frontend for cc!</small>
 </header>
 <main>
@@ -37,6 +37,7 @@
             return;
         }
 
+        // if you want to take some load off the server, do some validation here!
         shortenBtn.disabled = true;
         result.textContent = 'Shortening...';
 

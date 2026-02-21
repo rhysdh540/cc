@@ -6,24 +6,33 @@ makes urls short
 
 ```sh
 # on server
-cc-server --db <path-to-db> --url <url-to-serve> --index <path-to-index.html>
+> cc-server serve <path-to-db> --url <url-to-serve> --index <path-to-index.html>
 ```
 
 then visit `<url>` in your browser to see the index page. 
 an example is provided at [example_index.html](./example_index.html):
 ```sh
 # in the project root
-cargo run --bin cc-server -- --db ./cc.db --index ./example_index.html   
+> cargo run --bin cc-server -- serve ./cc.db --index ./example_index.html   
 ```
 
 ```sh
 # on client
 
-# put --> {"ok":true,"msg":"<code>"}
-curl -X POST <url>/put -d '<long-url>'
+> curl -X POST <url>/put -d '<long-url>'
+{"ok":true,"msg":"<code>"}
 
-# get --> redirects to <long-url>
-curl -i <url>/<code>
+> curl -X GET -i <url>/<code>
+HTTP/1.1 308 Permanent Redirect
+...
+```
+
+there is also an `ls` subcommand that lists all the codes and their corresponding urls in the database:
+```sh
+> cc-server ls cc.db
+2 mappings found in cc.db:
+  <code1> -> <long-url1>
+  <code2> -> <long-url2>
 ```
 
 ## api

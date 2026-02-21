@@ -16,4 +16,4 @@ anyhow = "1"
 
 [[bin]]
 name = "cc-server"
-path = "src/main.rs"
+path = "cc.rs"
