@@ -48,6 +48,21 @@ enum Commands {
         /// Path to the database file.
         #[arg()]
         db: PathBuf,
+    },
+
+    #[command(name = "rm")]
+    Remove {
+        /// Path to the database file.
+        #[arg()]
+        db: PathBuf,
+
+        /// Code to remove.
+        #[arg(required_unless_present = "all")]
+        code: Option<String>,
+
+        /// Remove all mappings.
+        #[arg(long, conflicts_with = "code")]
+        all: bool,
     }
 }
 
@@ -62,18 +77,19 @@ const URL_TO_CODE: TableDefinition<&str, &str> = TableDefinition::new("u2c");
 const ALLOWED_SCHEMES: &[&str] = &["http", "https"];
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Serve { db, url, index } => serve(db, url, index).await?,
         Commands::List { db } => list(db)?,
+        Commands::Remove { db, code, all } => remove(db, code, all)?,
     }
 
     Ok(())
 }
 
-fn list(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
+fn list(path: PathBuf) -> Result<()> {
     if !path.is_file() {
         eprintln!("database file does not exist or is not a file: {}", path.display());
         std::process::exit(1);
@@ -95,11 +111,53 @@ fn list(path: PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn remove(
+    path: PathBuf,
+    code: Option<String>,
+    all: bool
+) -> Result<()> {
+    if !path.is_file() {
+        eprintln!("database file does not exist or is not a file: {}", path.display());
+        std::process::exit(1);
+    }
+    let mut db = Database::open(&path)?;
+    let wr = db.begin_write()?;
+    let mut wr_c2u = wr.open_table(CODE_TO_URL)?;
+    let mut wr_u2c = wr.open_table(URL_TO_CODE)?;
+
+    if all {
+        let count = wr_c2u.len()?;
+        wr_c2u.retain(|_, _| false)?;
+        wr_u2c.retain(|_, _| false)?;
+        println!("removed {} mapping{}", count, if count == 1 { "" } else { "s" });
+    } else {
+        let code = code.unwrap();
+        let url = match wr_c2u.get(code.as_str())? {
+            Some(url) => url.value().to_string(),
+            None => {
+                println!("code not found: {}", code);
+                return Ok(());
+            }
+        };
+        wr_c2u.remove(code.as_str())?;
+        wr_u2c.remove(url.as_str())?;
+        println!("removed mapping {} -> {}", code, url);
+    }
+
+    drop(wr_c2u);
+    drop(wr_u2c);
+
+    wr.commit()?;
+    db.compact()?;
+
+    Ok(())
+}
+
 async fn serve(
     path: PathBuf,
     url: SocketAddr,
     index: Option<PathBuf>
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }

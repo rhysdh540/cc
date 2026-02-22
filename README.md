@@ -31,12 +31,19 @@ location: <long-url>
 ...
 ```
 
-there is also an `ls` subcommand that lists all the codes and their corresponding urls in the database:
+### subcommands
+`ls` lists all the codes and their corresponding urls in the database:
 ```sh
 > cc-server ls cc.db
 2 mappings found in cc.db:
   <code1> -> <long-url1>
   <code2> -> <long-url2>
+```
+
+`rm` removes a code from the database (and also compacts it):
+```sh
+> cc-server rm cc.db <code> # or --all
+removed mapping <code> -> <long-url>
 ```
 
 ## api
