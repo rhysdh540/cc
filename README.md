@@ -6,14 +6,14 @@ makes urls short
 
 ```sh
 # on server
-> cc-server serve <path-to-db> --url <url-to-serve> --index <path-to-index.html>
+> cc-server <path-to-db> serve --url <url-to-serve> --index <path-to-index.html>
 ```
 
 then visit `<url>` in your browser to see the index page. 
 an example is provided at [example_index.html](./example_index.html):
 ```sh
 # in the project root
-> cargo run --bin cc-server -- serve ./cc.db --index ./example_index.html   
+> cargo run --bin cc-server -- ./cc.db serve --index ./example_index.html   
 ```
 
 ```sh
@@ -34,7 +34,7 @@ location: <long-url>
 ### subcommands
 `ls` lists all the codes and their corresponding urls in the database:
 ```sh
-> cc-server ls cc.db
+> cc-server cc.db ls
 2 mappings found in cc.db:
   <code1> -> <long-url1>
   <code2> -> <long-url2>
@@ -42,7 +42,7 @@ location: <long-url>
 
 `rm` removes a code from the database (and also compacts it):
 ```sh
-> cc-server rm cc.db <code> # or --all
+> cc-server cc.db rm <code> # or --all
 removed mapping <code> -> <long-url>
 ```
 

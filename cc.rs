@@ -23,18 +23,20 @@ use tokio::net::TcpListener;
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about)]
 struct Cli {
+    /// Path to the database file.
+    #[arg()]
+    db: PathBuf,
+
     #[command(subcommand)]
     command: Commands,
 }
 
 #[derive(Debug, Clone, Parser)]
 enum Commands {
+    /// Start the server.
+    #[command(alias = "s")]
     Serve {
-        /// Path to the database file.
-        #[arg()]
-        db: PathBuf,
-
-        /// Base URL for shortened links.
+        /// Base URL to serve on.
         #[arg(long, default_value = "127.0.0.1:8080")]
         url: SocketAddr,
 
@@ -44,18 +46,11 @@ enum Commands {
     },
     /// List all code -> url mappings in the database.
     #[command(name = "ls")]
-    List {
-        /// Path to the database file.
-        #[arg()]
-        db: PathBuf,
-    },
+    List,
 
+    /// Remove a mapping by code or all mappings.
     #[command(name = "rm")]
     Remove {
-        /// Path to the database file.
-        #[arg()]
-        db: PathBuf,
-
         /// Code to remove.
         #[arg(required_unless_present = "all")]
         code: Option<String>,
@@ -81,9 +76,9 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Serve { db, url, index } => serve(db, url, index).await?,
-        Commands::List { db } => list(db)?,
-        Commands::Remove { db, code, all } => remove(db, code, all)?,
+        Commands::Serve { url, index } => serve(cli.db, url, index).await?,
+        Commands::List => list(cli.db)?,
+        Commands::Remove { code, all } => remove(cli.db, code, all)?,
     }
 
     Ok(())
